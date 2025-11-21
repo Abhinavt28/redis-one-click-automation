@@ -41,8 +41,12 @@ pipeline {
 
         stage('Run Ansible Playbook') {
             steps {
+                // WAIT FOR EC2 TO BE READY
+                sh 'sleep 30'
+
                 sh '''
-                ANSIBLE_CONFIG=./ansible/ansible.cfg ansible-playbook -i ansible/inventory/aws_ec2.yml ansible/site.yml
+                ANSIBLE_CONFIG=./ansible/ansible.cfg ansible-playbook \
+                    -i ansible/inventory/aws_ec2.yml ansible/site.yml
                 '''
             }
         }
