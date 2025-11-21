@@ -23,7 +23,7 @@ pipeline {
                 dir('terraform') {
                     sh '''
                     terraform apply -auto-approve \
-                      -var="vpc_id=vpc-03bdb5ce605d44e8d" \
+                      -var="vpc_id=vpc-042437eaf1b20f768" \
                       -var="subnet_id=subnet-099653b9a674986d4" \
                       -var="key_name=ubuntu"
                     '''
