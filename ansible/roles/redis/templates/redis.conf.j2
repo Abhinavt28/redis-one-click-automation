@@ -1,0 +1,10 @@
+bind {{ redis_bind }}
+port {{ redis_port }}
+protected-mode yes
+dir {{ redis_dir }}
+appendonly yes
+
+{% if redis_requirepass != "" %}
+requirepass {{ redis_requirepass }}
+{% endif %}
+

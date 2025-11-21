@@ -1,0 +1,20 @@
+plugin: amazon.aws.aws_ec2
+
+regions:
+  - us-east-1
+
+filters:
+  tag:Role: redis-server
+
+hostnames:
+  - ip-address
+
+compose:
+  ansible_host: "(PublicIpAddress | default(private_ip_address))"
+
+keyed_groups:
+  - prefix: tag_Role_
+    key: tags.Role
+
+
+

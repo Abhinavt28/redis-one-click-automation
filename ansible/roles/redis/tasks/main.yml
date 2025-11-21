@@ -1,0 +1,26 @@
+---
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install Redis
+  apt:
+    name: redis-server
+    state: present
+
+- name: Deploy redis.conf template
+  template:
+    src: redis.conf.j2
+    dest: /etc/redis/redis.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart redis
+
+- name: Enable and start Redis
+  service:
+    name: redis-server
+    state: started
+    enabled: yes
+
