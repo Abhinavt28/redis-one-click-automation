@@ -21,7 +21,12 @@ pipeline {
         stage('Terraform Apply') {
             steps {
                 dir('terraform') {
-                    sh 'terraform apply -auto-approve'
+                    sh '''
+                    terraform apply -auto-approve \
+                      -var="vpc_id=vpc-03bdb5ce605d44e8d" \
+                      -var="subnet_id=subnet-099653b9a674986d4" \
+                      -var="key_name=ubuntu"
+                    '''
                 }
             }
         }
@@ -53,4 +58,3 @@ pipeline {
         }
     }
 }
-
