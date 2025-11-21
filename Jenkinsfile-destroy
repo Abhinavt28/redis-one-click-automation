@@ -1,0 +1,31 @@
+pipeline {
+    agent any
+
+    stages {
+
+        stage('Checkout Code') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/Abhinavt28/redis-one-click-automation.git'
+            }
+        }
+
+        stage('Terraform Destroy') {
+            steps {
+                dir('terraform') {
+                    sh 'terraform destroy -auto-approve'
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Infrastructure Destroyed Successfully!"
+        }
+        failure {
+            echo "Destroy Failed. Check logs."
+        }
+    }
+}
+
