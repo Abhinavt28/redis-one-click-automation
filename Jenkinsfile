@@ -34,8 +34,7 @@ pipeline {
         stage('Configure Ansible Dynamic Inventory') {
             steps {
                 sh '''
-                sudo mkdir -p /etc/ansible
-                sudo cp ansible/ansible.cfg /etc/ansible/
+                cp ansible/ansible.cfg .
                 '''
             }
         }
@@ -43,7 +42,7 @@ pipeline {
         stage('Run Ansible Playbook') {
             steps {
                 sh '''
-                ansible-playbook -i ansible/inventory/aws_ec2.yml ansible/site.yml
+                ANSIBLE_CONFIG=./ansible/ansible.cfg ansible-playbook -i ansible/inventory/aws_ec2.yml ansible/site.yml
                 '''
             }
         }
