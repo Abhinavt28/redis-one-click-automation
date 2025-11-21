@@ -3,6 +3,12 @@ pipeline {
 
     stages {
 
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+
         stage('Checkout Code') {
             steps {
                 git branch: 'main',
@@ -23,9 +29,9 @@ pipeline {
                 dir('terraform') {
                     sh '''
                     terraform apply -auto-approve \
-                      -var="vpc_id=vpc-042437eaf1b20f768" \
-                      -var="subnet_id=subnet-099653b9a674986d4" \
-                      -var="key_name=ubuntu"
+                        -var="vpc_id=vpc-042437eaf1b20f768" \
+                        -var="subnet_id=subnet-099653b9a674986d4" \
+                        -var="key_name=ubuntu"
                     '''
                 }
             }
@@ -41,12 +47,13 @@ pipeline {
 
         stage('Run Ansible Playbook') {
             steps {
-                // WAIT FOR EC2 TO BE READY
+
+                echo "Waiting 30 seconds for EC2 instance to be fully up..."
                 sh 'sleep 30'
 
                 sh '''
-                ANSIBLE_CONFIG=./ansible/ansible.cfg ansible-playbook \
-                    -i ansible/inventory/aws_ec2.yml ansible/site.yml
+                ANSIBLE_CONFIG=./ansible/ansible.cfg \
+                ansible-playbook -i ansible/inventory/aws_ec2.yml ansible/site.yml
                 '''
             }
         }
@@ -61,3 +68,4 @@ pipeline {
         }
     }
 }
+
