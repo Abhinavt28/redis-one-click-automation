@@ -7,7 +7,13 @@ pipeline {
         KEY_FILE = "${env.HOME}/.ssh/${KEY_NAME}.pem"
     }
 
-    
+    stages {
+
+        stage('Clean Workspace') {
+            steps {
+                echo "Skipping cleanWs for first run"
+            }
+        }
 
         stage('Checkout Code') {
             steps {
@@ -67,7 +73,11 @@ pipeline {
     }
 
     post {
-        success { echo "🚀 Redis Master + Replica Deployment SUCCESS!" }
-        failure { echo "❌ Deployment Failed. Check console output." }
+        success {
+            echo "🚀 Redis Master + Replica Deployment SUCCESS!"
+        }
+        failure {
+            echo "❌ Deployment Failed. Check console output."
+        }
     }
 }
