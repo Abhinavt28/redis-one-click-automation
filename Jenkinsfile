@@ -58,29 +58,30 @@ pipeline {
         }
 
         stage('Configure Redis Using Ansible') {
-            steps {
-                sh """
-                    cd ${ANSIBLE_DIR}
+    steps {
+        sh """
+            cd ${ANSIBLE_DIR}
 
-                    # Install AWS collection
-                    ansible-galaxy collection install -r requirements.yml
+            # Install the AWS inventory plugin
+            ansible-galaxy collection install -r requirements.yml
 
-                    # Get Bastion IP
-                    BASTION_IP=\$(terraform -chdir=../terraform output -raw bastion_public_ip)
+            # Get bastion IP from terraform
+            BASTION_IP=\$(terraform -chdir=../terraform output -raw bastion_public_ip)
 
-                    # SSH Proxy Command
-                    export ANSIBLE_SSH_ARGS="-o ProxyCommand='ssh -W %h:%p ubuntu@${BASTION_IP} -i ${KEY_FILE}'"
+            echo "Using Bastion IP: \$BASTION_IP"
 
-                    # Debug Inventory
-                    ansible-inventory -i inventory/aws_ec2.yml --graph
+            # Proxy to access private subnets through Bastion Host
+            export ANSIBLE_SSH_ARGS="-o ProxyCommand='ssh -W %h:%p ubuntu@\$BASTION_IP -i ${KEY_FILE}'"
 
-                    # Run Playbook
-                    ansible-playbook -i inventory/aws_ec2.yml site.yml
-                """
-            }
-        }
+            # Debug inventory
+            ansible-inventory -i inventory/aws_ec2.yml --graph
 
+            # Run playbook
+            ansible-playbook -i inventory/aws_ec2.yml site.yml
+        """
     }
+}
+
 
     post {
         success {
