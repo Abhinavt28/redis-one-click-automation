@@ -1,6 +1,11 @@
 pipeline {
     agent any
 
+    environment {
+        TF_WORKING_DIR = "terraform"
+        ANSIBLE_DIR = "ansible"
+    }
+
     stages {
 
         stage('Clean Workspace') {
@@ -11,61 +16,67 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                git branch: 'main',
-                    url: 'https://github.com/Abhinavt28/redis-one-click-automation.git'
+                checkout scm
             }
         }
 
         stage('Terraform Init') {
             steps {
-                dir('terraform') {
-                    sh 'terraform init'
-                }
+                sh """
+                    cd ${TF_WORKING_DIR}
+                    terraform init -input=false
+                """
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                sh """
+                    cd ${TF_WORKING_DIR}
+                    terraform plan -out=tfplan -input=false
+                """
             }
         }
 
         stage('Terraform Apply') {
             steps {
-                dir('terraform') {
-                    sh '''
-                    terraform apply -auto-approve \
-                        -var="vpc_id=vpc-042437eaf1b20f768" \
-                        -var="subnet_id=subnet-099653b9a674986d4" \
-                        -var="key_name=ubuntu"
-                    '''
-                }
+                sh """
+                    cd ${TF_WORKING_DIR}
+                    terraform apply -input=false -auto-approve tfplan
+                """
             }
         }
 
-        stage('Configure Ansible Dynamic Inventory') {
+        stage('Wait For EC2 Boot') {
             steps {
-                sh '''
-                cp ansible/ansible.cfg .
-                '''
+                echo "Waiting 30 seconds for bastion + redis instances to fully boot..."
+                sh "sleep 30"
             }
         }
 
-        stage('Run Ansible Playbook') {
+        stage('Configure Redis (Ansible)') {
             steps {
+                sh """
+                    cd ${ANSIBLE_DIR}
 
-                echo "Waiting 30 seconds for EC2 instance to be fully up..."
-                sh 'sleep 30'
+                    # Fetch Bastion IP dynamically from terraform state
+                    BASTION_IP=\$(terraform -chdir=../terraform output -raw bastion_public_ip)
 
-                sh '''
-                ANSIBLE_CONFIG=./ansible/ansible.cfg \
-                ansible-playbook -i ansible/inventory/aws_ec2.yml ansible/site.yml
-                '''
+                    export ANSIBLE_SSH_ARGS="-o ProxyCommand='ssh -W %h:%p ubuntu@\$BASTION_IP -i ~/.ssh/${KEY_NAME}.pem'"
+
+                    ansible-playbook -i inventory/aws_ec2.yml site.yml
+                """
             }
         }
+
     }
 
     post {
         success {
-            echo "Redis One-Click Automation Completed Successfully!"
+            echo "🚀 Redis Master + Replica Deployment Successful!"
         }
         failure {
-            echo "Build Failed. Check logs."
+            echo "❌ Deployment Failed — Please check logs!"
         }
     }
 }
-
