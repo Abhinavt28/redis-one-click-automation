@@ -2,52 +2,30 @@ pipeline {
     agent any
 
     stages {
-
-        stage('Checkout Code') {
+        stage('Checkout') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/Abhinavt28/redis-one-click-automation.git'
+                    url: 'https://github.com/Abhinavt28/redis-one-click-automation.git',
+                    credentialsId: 'github-creds'
             }
         }
 
-        stage('Terraform Init (Load S3 State)') {
+        stage('Terraform Init') {
             steps {
-                dir('terraform') {
-                    sh """
-                        terraform init -input=false
-                    """
-                }
-            }
-        }
-
-        stage('Terraform Plan Destroy') {
-            steps {
-                dir('terraform') {
-                    sh """
-                        terraform plan -destroy -out=tfdestroy -input=false
-                    """
-                }
+                sh """
+                    cd terraform
+                    terraform init
+                """
             }
         }
 
         stage('Terraform Destroy') {
             steps {
-                dir('terraform') {
-                    sh """
-                        terraform destroy -auto-approve -input=false
-                    """
-                }
+                sh """
+                    cd terraform
+                    terraform destroy -auto-approve
+                """
             }
-        }
-
-    }
-
-    post {
-        success {
-            echo "🗑️ Successfully Destroyed All Resources!"
-        }
-        failure {
-            echo "❌ Destroy Failed. Check logs!"
         }
     }
 }
