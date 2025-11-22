@@ -23,6 +23,17 @@ pipeline {
             }
         }
 
+        stage('Fix SSH known_hosts') {
+            steps {
+                sh '''
+                    echo "Cleaning Jenkins SSH known_hosts..."
+                    rm -f ~/.ssh/known_hosts || true
+                    touch ~/.ssh/known_hosts
+                    chmod 600 ~/.ssh/known_hosts
+                '''
+            }
+        }
+
         stage('Terraform Init') {
             steps {
                 sh """
@@ -52,7 +63,7 @@ pipeline {
 
         stage('Wait For EC2 Boot') {
             steps {
-                echo "Waiting 30 seconds..."
+                echo "Waiting 30 seconds for bastion & Redis instances to be ready…"
                 sh "sleep 30"
             }
         }
@@ -69,6 +80,7 @@ pipeline {
                     BASTION_IP=$(terraform -chdir=../terraform output -raw bastion_public_ip)
                     echo "Bastion IP = $BASTION_IP"
 
+                    # Set ProxyCommand via bastion
                     export ANSIBLE_SSH_ARGS="-o ProxyCommand=\\"ssh -W %h:%p ubuntu@$BASTION_IP -i /var/lib/jenkins/.ssh/ubuntu.pem\\""
 
                     echo "Testing inventory..."
@@ -83,7 +95,7 @@ pipeline {
 
     post {
         success {
-            echo "🚀 Deployment SUCCESS!"
+            echo "🚀 Redis Master + Replica Deployment SUCCESS!"
         }
         failure {
             echo "❌ Deployment FAILED — Check logs."
