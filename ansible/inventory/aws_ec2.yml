@@ -6,5 +6,5 @@ filters:
   tag:Project: redis
 
 keyed_groups:
-  - key: tags.Role
-    prefix: tag_Role
+  - prefix: tag_Role_
+    key: tags.Role
