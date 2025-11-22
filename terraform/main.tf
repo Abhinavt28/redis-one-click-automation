@@ -36,7 +36,7 @@ resource "aws_vpc" "main" {
 }
 
 # -----------------------------
-# Internet Gateway
+# IGW
 # -----------------------------
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
@@ -47,7 +47,7 @@ resource "aws_internet_gateway" "igw" {
 }
 
 # -----------------------------
-# Subnets
+# PUBLIC SUBNET
 # -----------------------------
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
@@ -60,6 +60,9 @@ resource "aws_subnet" "public" {
   }
 }
 
+# -----------------------------
+# PRIVATE SUBNETS
+# -----------------------------
 resource "aws_subnet" "private_master" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.private_subnet_master_cidr
@@ -83,7 +86,7 @@ resource "aws_subnet" "private_replica" {
 }
 
 # -----------------------------
-# NAT Gateway
+# NAT GATEWAY
 # -----------------------------
 resource "aws_eip" "nat_eip" {
   domain = "vpc"
@@ -104,7 +107,7 @@ resource "aws_nat_gateway" "nat" {
 }
 
 # -----------------------------
-# Route Tables
+# ROUTE TABLES
 # -----------------------------
 resource "aws_route_table" "public_rt" {
   vpc_id = aws_vpc.main.id
@@ -148,9 +151,8 @@ resource "aws_route_table_association" "private_replica_assoc" {
 }
 
 # -----------------------------
-# Security Groups
+# SECURITY GROUPS
 # -----------------------------
-
 resource "aws_security_group" "bastion_sg" {
   name        = "bastion-sg"
   description = "Allow SSH only from your IP"
@@ -177,17 +179,19 @@ resource "aws_security_group" "bastion_sg" {
 
 resource "aws_security_group" "redis_sg" {
   name        = "redis-db-sg"
-  description = "Allow redis & ssh from bastion"
+  description = "Allow redis traffic"
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port       = 22
-    to_port         = 22
-    protocol        = "tcp"
+    description = "Allow SSH from bastion"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
     security_groups = [aws_security_group.bastion_sg.id]
   }
 
   ingress {
+    description = "Redis traffic inside VPC"
     from_port   = var.redis_port
     to_port     = var.redis_port
     protocol    = "tcp"
@@ -207,7 +211,7 @@ resource "aws_security_group" "redis_sg" {
 }
 
 # -----------------------------
-# Ubuntu AMI
+# UBUNTU AMI
 # -----------------------------
 data "aws_ami" "ubuntu" {
   most_recent = true
@@ -220,7 +224,7 @@ data "aws_ami" "ubuntu" {
 }
 
 # -----------------------------
-# Bastion Host
+# BASTION
 # -----------------------------
 resource "aws_instance" "bastion" {
   ami                         = data.aws_ami.ubuntu.id
@@ -238,7 +242,7 @@ resource "aws_instance" "bastion" {
 }
 
 # -----------------------------
-# Redis Master
+# REDIS MASTER
 # -----------------------------
 resource "aws_instance" "redis_master" {
   ami                    = data.aws_ami.ubuntu.id
@@ -246,6 +250,12 @@ resource "aws_instance" "redis_master" {
   subnet_id              = aws_subnet.private_master.id
   vpc_security_group_ids = [aws_security_group.redis_sg.id]
   key_name               = var.key_name
+
+  tags = {
+    Name    = "redis-master"
+    Project = "redis"
+    Role    = "master"
+  }
 
   user_data = <<-EOF
   #!/bin/bash
@@ -255,14 +265,10 @@ resource "aws_instance" "redis_master" {
   systemctl enable redis-server
   systemctl restart redis-server
   EOF
-
-  tags = {
-    Name = "redis-master"
-  }
 }
 
 # -----------------------------
-# Redis Replica
+# REDIS REPLICA
 # -----------------------------
 resource "aws_instance" "redis_replica" {
   ami                    = data.aws_ami.ubuntu.id
@@ -270,6 +276,12 @@ resource "aws_instance" "redis_replica" {
   subnet_id              = aws_subnet.private_replica.id
   vpc_security_group_ids = [aws_security_group.redis_sg.id]
   key_name               = var.key_name
+
+  tags = {
+    Name    = "redis-replica"
+    Project = "redis"
+    Role    = "replica"
+  }
 
   user_data = <<-EOF
   #!/bin/bash
@@ -280,8 +292,4 @@ resource "aws_instance" "redis_replica" {
   systemctl enable redis-server
   systemctl restart redis-server
   EOF
-
-  tags = {
-    Name = "redis-replica"
-  }
 }
