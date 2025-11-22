@@ -1,11 +1,11 @@
----
-
 - hosts: tag_Role__master
   become: yes
+  gather_facts: yes
   roles:
-    - redis_master
+    - redis
 
 - hosts: tag_Role__replica
   become: yes
+  gather_facts: yes
   roles:
-    - redis_replica
+    - redis
