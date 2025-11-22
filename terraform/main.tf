@@ -24,7 +24,6 @@ provider "aws" {
   region = var.aws_region
 }
 
-
 #########################################
 # VPC
 #########################################
@@ -41,17 +40,14 @@ resource "aws_vpc" "main" {
   }
 }
 
-
 #########################################
 # INTERNET GATEWAY
 #########################################
 
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
-
   tags = { Name = "redis-igw" }
 }
-
 
 #########################################
 # SUBNETS
@@ -84,7 +80,6 @@ resource "aws_subnet" "private_replica" {
   tags = { Name = "private-replica-subnet" }
 }
 
-
 #########################################
 # NAT + EIP
 #########################################
@@ -101,7 +96,6 @@ resource "aws_nat_gateway" "nat" {
 
   tags = { Name = "redis-nat" }
 }
-
 
 #########################################
 # ROUTE TABLES
@@ -144,13 +138,13 @@ resource "aws_route_table_association" "private_replica_assoc" {
   subnet_id      = aws_subnet.private_replica.id
 }
 
-
 #########################################
 # SECURITY GROUPS
 #########################################
 
 resource "aws_security_group" "bastion_sg" {
   name        = "bastion-sg"
+  description = "Allow SSH only from your IP"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -171,7 +165,8 @@ resource "aws_security_group" "bastion_sg" {
 }
 
 resource "aws_security_group" "redis_sg" {
-  name        = "redis-sg"
+  name        = "redis-db-sg"
+  description = "Allow redis traffic"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -183,7 +178,7 @@ resource "aws_security_group" "redis_sg" {
   }
 
   ingress {
-    description = "Redis internal traffic"
+    description = "Redis traffic inside VPC"
     from_port   = 6379
     to_port     = 6379
     protocol    = "tcp"
@@ -200,7 +195,6 @@ resource "aws_security_group" "redis_sg" {
   tags = { Name = "redis-sg" }
 }
 
-
 #########################################
 # UBUNTU AMI
 #########################################
@@ -215,25 +209,23 @@ data "aws_ami" "ubuntu" {
   }
 }
 
-
 #########################################
 # BASTION HOST
 #########################################
 
 resource "aws_instance" "bastion" {
-  ami                    = data.aws_ami.ubuntu.id
-  instance_type          = "t3.micro"
-  subnet_id              = aws_subnet.public.id
-  vpc_security_group_ids = [aws_security_group.bastion_sg.id]
+  ami                         = data.aws_ami.ubuntu.id
+  instance_type               = "t3.micro"
+  subnet_id                   = aws_subnet.public.id
+  vpc_security_group_ids      = [aws_security_group.bastion_sg.id]
   associate_public_ip_address = true
-  key_name               = var.key_name
+  key_name                    = var.key_name
 
   tags = {
-    Name  = "bastion-host"
+    Name    = "bastion-host"
     Project = "redis"
   }
 }
-
 
 #########################################
 # REDIS MASTER
@@ -254,22 +246,21 @@ resource "aws_instance" "redis_master" {
 
   user_data = <<-EOF
   #!/bin/bash
+
   apt-get update -y
   apt-get install -y redis-server
 
-  # Allow all incoming connections
+  # Allow external
   sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis/redis.conf
   sed -i 's/^protected-mode yes/protected-mode no/' /etc/redis/redis.conf
 
   # Add Jenkins public key
-  echo "REPLACE_WITH_JENKINS_PUBLIC_KEY" >> /home/ubuntu/.ssh/authorized_keys
-  chown ubuntu:ubuntu /home/ubuntu/.ssh/authorized_keys
+  echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDHHFZa5jQb5zb867a45BH9j+zEdQ11bryEVCv2HIwjqg6GxOUi37jXMcra8dy901WrPU7Vq4QoN0UHN9L9+tYFnOS1tStBooQ3WnYIAGnROuLo81Q0bmVQ1VJ+X0/v+XJSN9XEQ0EcTCO9bcn3HX83aY2oghs7Q2ze+dn/uoLVt5GSgSG2S0CCpuztUuPC19597qv96p8NnmgJT+BGyI0uOrpQKBrvycZbXNUHdXJQXuLAVgVDwkDIpnVA7UUrZc4606Ipwuj/SSBGVagFUZZwAdA2g1lpXNr1wHtSyeW8fFtipUzc1WGNjRsq+VQb3ZlKmSGBJvrmQPv5HosyqQ4h" >> /home/ubuntu/.ssh/authorized_keys
 
   systemctl enable redis-server
   systemctl restart redis-server
   EOF
 }
-
 
 #########################################
 # REDIS REPLICA
@@ -290,22 +281,18 @@ resource "aws_instance" "redis_replica" {
 
   user_data = <<-EOF
   #!/bin/bash
+
   apt-get update -y
   apt-get install -y redis-server
 
-  # Allow external connections
   sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis/redis.conf
   sed -i 's/^protected-mode yes/protected-mode no/' /etc/redis/redis.conf
 
-  # Configure replica
   echo "replicaof ${aws_instance.redis_master.private_ip} 6379" >> /etc/redis/redis.conf
 
-  # Add Jenkins public key
-  echo "REPLACE_WITH_JENKINS_PUBLIC_KEY" >> /home/ubuntu/.ssh/authorized_keys
-  chown ubuntu:ubuntu /home/ubuntu/.ssh/authorized_keys
+  echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDHHFZa5jQb5zb867a45BH9j+zEdQ11bryEVCv2HIwjqg6GxOUi37jXMcra8dy901WrPU7Vq4QoN0UHN9L9+tYFnOS1tStBooQ3WnYIAGnROuLo81Q0bmVQ1VJ+X0/v+XJSN9XEQ0EcTCO9bcn3HX83aY2oghs7Q2ze+dn/uoLVt5GSgSG2S0CCpuztUuPC19597qv96p8NnmgJT+BGyI0uOrpQKBrvycZbXNUHdXJQXuLAVgVDwkDIpnVA7UUrZc4606Ipwuj/SSBGVagFUZZwAdA2g1lpXNr1wHtSyeW8fFtipUzc1WGNjRsq+VQb3ZlKmSGBJvrmQPv5HosyqQ4h" >> /home/ubuntu/.ssh/authorized_keys
 
   systemctl enable redis-server
   systemctl restart redis-server
   EOF
 }
-
