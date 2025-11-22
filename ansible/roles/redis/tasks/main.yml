@@ -1,26 +1,35 @@
 ---
-- name: Update apt cache
-  apt:
-    update_cache: yes
-    cache_valid_time: 3600
-
 - name: Install Redis
   apt:
     name: redis-server
     state: present
+    update_cache: yes
 
-- name: Deploy redis.conf template
-  template:
-    src: redis.conf.j2
-    dest: /etc/redis/redis.conf
-    owner: root
-    group: root
-    mode: "0644"
-  notify: restart redis
+- name: Allow redis to listen on all interfaces
+  lineinfile:
+    path: /etc/redis/redis.conf
+    regexp: '^bind'
+    line: 'bind 0.0.0.0'
 
-- name: Enable and start Redis
+- name: Disable protected-mode
+  lineinfile:
+    path: /etc/redis/redis.conf
+    regexp: '^protected-mode'
+    line: 'protected-mode no'
+
+- name: Fetch master private IP (for replica only)
+  when: "'replica' in group_names"
+  command: terraform -chdir=../../terraform output -raw redis_master_private_ip
+  register: master_ip_cmd
+
+- name: Configure replicaof
+  when: "'replica' in group_names"
+  lineinfile:
+    path: /etc/redis/redis.conf
+    line: "replicaof {{ master_ip_cmd.stdout }} 6379"
+
+- name: Restart Redis
   service:
     name: redis-server
-    state: started
+    state: restarted
     enabled: yes
-
