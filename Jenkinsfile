@@ -52,43 +52,41 @@ pipeline {
 
         stage('Wait For EC2 Boot') {
             steps {
-                echo "Waiting 30 seconds for servers to be ready…"
+                echo "Waiting 30 seconds..."
                 sh "sleep 30"
             }
         }
 
         stage('Configure Redis Using Ansible') {
-    steps {
-        sh """
-            cd ${ANSIBLE_DIR}
+            steps {
+                sh '''
+                    cd ansible
 
-            # Install the AWS inventory plugin
-            ansible-galaxy collection install -r requirements.yml
+                    echo "Installing AWS collection..."
+                    ansible-galaxy collection install -r requirements.yml
 
-            # Get bastion IP from terraform
-            BASTION_IP=\$(terraform -chdir=../terraform output -raw bastion_public_ip)
+                    echo "Fetching Bastion IP..."
+                    BASTION_IP=$(terraform -chdir=../terraform output -raw bastion_public_ip)
+                    echo "Bastion IP = $BASTION_IP"
 
-            echo "Using Bastion IP: \$BASTION_IP"
+                    export ANSIBLE_SSH_ARGS="-o ProxyCommand=\\"ssh -W %h:%p ubuntu@$BASTION_IP -i /var/lib/jenkins/.ssh/ubuntu.pem\\""
 
-            # Proxy to access private subnets through Bastion Host
-            export ANSIBLE_SSH_ARGS="-o ProxyCommand='ssh -W %h:%p ubuntu@\$BASTION_IP -i ${KEY_FILE}'"
+                    echo "Testing inventory..."
+                    ansible-inventory -i inventory/aws_ec2.yml --graph
 
-            # Debug inventory
-            ansible-inventory -i inventory/aws_ec2.yml --graph
-
-            # Run playbook
-            ansible-playbook -i inventory/aws_ec2.yml site.yml
-        """
+                    echo "Running Ansible playbook..."
+                    ansible-playbook -i inventory/aws_ec2.yml site.yml
+                '''
+            }
+        }
     }
-}
-
 
     post {
         success {
-            echo "🚀 Redis Master + Replica Deployment SUCCESS!"
+            echo "🚀 Deployment SUCCESS!"
         }
         failure {
-            echo "❌ Deployment Failed. Check console output."
+            echo "❌ Deployment FAILED — Check logs."
         }
     }
 }
