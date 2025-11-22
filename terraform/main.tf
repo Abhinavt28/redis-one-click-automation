@@ -2,11 +2,10 @@ terraform {
   required_version = ">= 1.0"
 
   backend "s3" {
-    bucket         = "abhinav-redis-tf-state"
-    key            = "redis-infra/terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "redis-tf-lock"
-    encrypt        = true
+    bucket = "abhinav-redis-tf-state"
+    key    = "redis-infra/terraform.tfstate"
+    region = "us-east-1"
+    encrypt = true
   }
 
   required_providers {
@@ -22,13 +21,12 @@ provider "aws" {
 }
 
 # -----------------------------
-# Networking - VPC & Subnets
+# VPC
 # -----------------------------
-
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
-  enable_dns_hostnames = true
   enable_dns_support   = true
+  enable_dns_hostnames = true
 
   tags = {
     Name  = "redis-vpc"
@@ -37,6 +35,9 @@ resource "aws_vpc" "main" {
   }
 }
 
+# -----------------------------
+# Internet Gateway
+# -----------------------------
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
 
@@ -45,11 +46,14 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
+# -----------------------------
+# Subnets
+# -----------------------------
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.public_subnet_cidr
-  availability_zone       = "us-east-1a"
   map_public_ip_on_launch = true
+  availability_zone       = "us-east-1a"
 
   tags = {
     Name = "public-bastion-subnet"
@@ -59,8 +63,8 @@ resource "aws_subnet" "public" {
 resource "aws_subnet" "private_master" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.private_subnet_master_cidr
-  availability_zone       = "us-east-1a"
   map_public_ip_on_launch = false
+  availability_zone       = "us-east-1a"
 
   tags = {
     Name = "private-master-subnet"
@@ -70,8 +74,8 @@ resource "aws_subnet" "private_master" {
 resource "aws_subnet" "private_replica" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.private_subnet_replica_cidr
-  availability_zone       = "us-east-1b"
   map_public_ip_on_launch = false
+  availability_zone       = "us-east-1b"
 
   tags = {
     Name = "private-replica-subnet"
@@ -79,9 +83,8 @@ resource "aws_subnet" "private_replica" {
 }
 
 # -----------------------------
-# NAT Gateway & Route Tables
+# NAT Gateway
 # -----------------------------
-
 resource "aws_eip" "nat_eip" {
   domain = "vpc"
 
@@ -93,15 +96,17 @@ resource "aws_eip" "nat_eip" {
 resource "aws_nat_gateway" "nat" {
   allocation_id = aws_eip.nat_eip.id
   subnet_id     = aws_subnet.public.id
+  depends_on    = [aws_internet_gateway.igw]
 
   tags = {
-    Name = "redis-nat-gw"
+    Name = "redis-nat"
   }
-
-  depends_on = [aws_internet_gateway.igw]
 }
 
-resource "aws_route_table" "public" {
+# -----------------------------
+# Route Tables
+# -----------------------------
+resource "aws_route_table" "public_rt" {
   vpc_id = aws_vpc.main.id
 
   route {
@@ -115,11 +120,11 @@ resource "aws_route_table" "public" {
 }
 
 resource "aws_route_table_association" "public_assoc" {
+  route_table_id = aws_route_table.public_rt.id
   subnet_id      = aws_subnet.public.id
-  route_table_id = aws_route_table.public.id
 }
 
-resource "aws_route_table" "private" {
+resource "aws_route_table" "private_rt" {
   vpc_id = aws_vpc.main.id
 
   route {
@@ -133,13 +138,13 @@ resource "aws_route_table" "private" {
 }
 
 resource "aws_route_table_association" "private_master_assoc" {
+  route_table_id = aws_route_table.private_rt.id
   subnet_id      = aws_subnet.private_master.id
-  route_table_id = aws_route_table.private.id
 }
 
 resource "aws_route_table_association" "private_replica_assoc" {
+  route_table_id = aws_route_table.private_rt.id
   subnet_id      = aws_subnet.private_replica.id
-  route_table_id = aws_route_table.private.id
 }
 
 # -----------------------------
@@ -148,11 +153,10 @@ resource "aws_route_table_association" "private_replica_assoc" {
 
 resource "aws_security_group" "bastion_sg" {
   name        = "bastion-sg"
-  description = "Allow SSH from my IP"
+  description = "Allow SSH only from your IP"
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "SSH from allowed CIDR"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -172,22 +176,18 @@ resource "aws_security_group" "bastion_sg" {
 }
 
 resource "aws_security_group" "redis_sg" {
-  name        = "db-sg"
-  description = "Redis master & replica security group"
+  name        = "redis-db-sg"
+  description = "Allow redis & ssh from bastion"
   vpc_id      = aws_vpc.main.id
 
-  # SSH only from Bastion
   ingress {
-    description = "SSH from bastion"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
     security_groups = [aws_security_group.bastion_sg.id]
   }
 
-  # Redis traffic only inside VPC
   ingress {
-    description = "Redis from within VPC"
     from_port   = var.redis_port
     to_port     = var.redis_port
     protocol    = "tcp"
@@ -202,16 +202,16 @@ resource "aws_security_group" "redis_sg" {
   }
 
   tags = {
-    Name = "db-sg"
+    Name = "redis-sg"
   }
 }
 
 # -----------------------------
-# Get Latest Ubuntu AMI
+# Ubuntu AMI
 # -----------------------------
 data "aws_ami" "ubuntu" {
   most_recent = true
-  owners      = ["099720109477"] # Canonical
+  owners      = ["099720109477"]
 
   filter {
     name   = "name"
@@ -220,19 +220,18 @@ data "aws_ami" "ubuntu" {
 }
 
 # -----------------------------
-# Bastion Host (Public Subnet)
+# Bastion Host
 # -----------------------------
 resource "aws_instance" "bastion" {
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.bastion_sg.id]
-  key_name                    = var.key_name
   associate_public_ip_address = true
+  key_name                    = var.key_name
 
   tags = {
     Name  = "bastion-host"
-    Role  = "bastion"
     OWNER = var.owner
     ENV   = var.env
   }
@@ -248,22 +247,18 @@ resource "aws_instance" "redis_master" {
   vpc_security_group_ids = [aws_security_group.redis_sg.id]
   key_name               = var.key_name
 
-  tags = {
-    Name  = "redis-master"
-    Role  = "redis-master"
-    OWNER = var.owner
-    ENV   = var.env
-  }
-
   user_data = <<-EOF
-              #!/bin/bash
-              apt-get update -y
-              apt-get install -y redis-server
-              sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis/redis.conf
-              sed -i 's/^protected-mode yes/protected-mode no/' /etc/redis/redis.conf
-              systemctl enable redis-server
-              systemctl restart redis-server
-              EOF
+  #!/bin/bash
+  apt-get update -y
+  apt-get install -y redis-server
+  sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis/redis.conf
+  systemctl enable redis-server
+  systemctl restart redis-server
+  EOF
+
+  tags = {
+    Name = "redis-master"
+  }
 }
 
 # -----------------------------
@@ -276,21 +271,17 @@ resource "aws_instance" "redis_replica" {
   vpc_security_group_ids = [aws_security_group.redis_sg.id]
   key_name               = var.key_name
 
-  tags = {
-    Name  = "redis-replica"
-    Role  = "redis-replica"
-    OWNER = var.owner
-    ENV   = var.env
-  }
-
   user_data = <<-EOF
-              #!/bin/bash
-              apt-get update -y
-              apt-get install -y redis-server
-              sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis/redis.conf
-              sed -i 's/^protected-mode yes/protected-mode no/' /etc/redis/redis.conf
-              echo "replicaof ${aws_instance.redis_master.private_ip} ${var.redis_port}" >> /etc/redis/redis.conf
-              systemctl enable redis-server
-              systemctl restart redis-server
-              EOF
+  #!/bin/bash
+  apt-get update -y
+  apt-get install -y redis-server
+  sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis/redis.conf
+  echo "replicaof ${aws_instance.redis_master.private_ip} 6379" >> /etc/redis/redis.conf
+  systemctl enable redis-server
+  systemctl restart redis-server
+  EOF
+
+  tags = {
+    Name = "redis-replica"
+  }
 }
