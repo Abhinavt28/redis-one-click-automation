@@ -71,6 +71,7 @@ ansible-inventory -i inventory/aws_ec2.yml --graph
 
 ansible-playbook -i inventory/aws_ec2.yml site.yml
 
+
         """
     }
 }
