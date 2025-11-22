@@ -2,6 +2,7 @@ pipeline {
     agent any
 
     stages {
+
         stage('Checkout') {
             steps {
                 git branch: 'main',
@@ -14,7 +15,7 @@ pipeline {
             steps {
                 sh """
                     cd terraform
-                    terraform init
+                    terraform init -migrate-state -force-copy
                 """
             }
         }
@@ -26,6 +27,15 @@ pipeline {
                     terraform destroy -auto-approve
                 """
             }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Destroy complete!"
+        }
+        failure {
+            echo "❌ Destroy failed!"
         }
     }
 }
