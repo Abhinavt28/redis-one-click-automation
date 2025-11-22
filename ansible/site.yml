@@ -1,5 +1,13 @@
-- hosts: tag_Role_redis_server
+---
+
+# Redis Master
+- hosts: tag_Role_master
   become: yes
   roles:
     - redis_master
+
+# Redis Replica
+- hosts: tag_Role_replica
+  become: yes
+  roles:
     - redis_replica
