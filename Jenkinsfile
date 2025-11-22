@@ -7,14 +7,7 @@ pipeline {
         KEY_FILE = "${env.HOME}/.ssh/${KEY_NAME}.pem"
     }
 
-    stages {
-
-        stage('Clean Workspace') {
-            steps {
-                echo "Skipping cleanWs for first run"
-                # cleanWs()  // DO NOT USE // inside steps
-            }
-        }
+    
 
         stage('Checkout Code') {
             steps {
