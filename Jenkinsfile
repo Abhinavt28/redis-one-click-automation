@@ -22,14 +22,15 @@ pipeline {
             }
         }
 
-        stage('Terraform Init') {
-            steps {
-                sh """
-                    cd ${TF_WORKING_DIR}
-                    terraform init
-                """
-            }
-        }
+       stage('Terraform Init') {
+    steps {
+        sh """
+            cd ${TF_WORKING_DIR}
+            terraform init -migrate-state -force-copy
+        """
+    }
+}
+
 
         stage('Terraform Plan') {
             steps {
