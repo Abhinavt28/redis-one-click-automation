@@ -4,21 +4,22 @@ pipeline {
     environment {
         TF_WORKING_DIR = "terraform"
         ANSIBLE_DIR    = "ansible"
-        KEY_FILE       = "${env.HOME}/.ssh/${KEY_NAME}.pem"
+        KEY_FILE       = "/var/lib/jenkins/.ssh/ubuntu.pem"
     }
 
     stages {
 
         stage('Clean Workspace') {
             steps {
-                echo "Skipping cleanWs for first run"
+                cleanWs()
             }
         }
 
         stage('Checkout Code') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/Abhinavt28/redis-one-click-automation.git'
+                    url: 'https://github.com/Abhinavt28/redis-one-click-automation.git',
+                    credentialsId: 'github-creds'
             }
         }
 
@@ -35,7 +36,7 @@ pipeline {
             steps {
                 sh """
                     cd ${TF_WORKING_DIR}
-                    terraform plan -out=tfplan -input=false -var="key_name=${KEY_NAME}"
+                    terraform plan -out=tfplan
                 """
             }
         }
@@ -44,41 +45,42 @@ pipeline {
             steps {
                 sh """
                     cd ${TF_WORKING_DIR}
-                    terraform apply -auto-approve -input=false tfplan
+                    terraform apply -auto-approve tfplan
                 """
             }
         }
 
         stage('Wait For EC2 Boot') {
             steps {
-                echo "Waiting 30 seconds for bastion & Redis instances to be ready…"
+                echo "Waiting 30 seconds for servers to be ready…"
                 sh "sleep 30"
             }
         }
 
-       stage('Configure Redis Using Ansible') {
-    steps {
-        sh """
-            cd \${ANSIBLE_DIR}
+        stage('Configure Redis Using Ansible') {
+            steps {
+                sh """
+                    cd ${ANSIBLE_DIR}
 
-            # Install AWS collection
-            ansible-galaxy collection install -r requirements.yml
+                    # Install AWS collection
+                    ansible-galaxy collection install -r requirements.yml
 
-            # Get bastion IP from terraform output
-            BASTION_IP=\$(terraform -chdir=../terraform output -raw bastion_public_ip)
+                    # Get Bastion IP
+                    BASTION_IP=\$(terraform -chdir=../terraform output -raw bastion_public_ip)
 
-            # SSH Proxy Through Bastion
-            export ANSIBLE_SSH_ARGS="-o ProxyCommand='ssh -W %h:%p ubuntu@\${BASTION_IP} -i \${KEY_FILE}'"
+                    # SSH Proxy Command
+                    export ANSIBLE_SSH_ARGS="-o ProxyCommand='ssh -W %h:%p ubuntu@${BASTION_IP} -i ${KEY_FILE}'"
 
-            # Debug inventory
-            ansible-inventory -i inventory/aws_ec2.yml --graph
+                    # Debug Inventory
+                    ansible-inventory -i inventory/aws_ec2.yml --graph
 
-            # Run playbook
-            ansible-playbook -i inventory/aws_ec2.yml site.yml
-        """
+                    # Run Playbook
+                    ansible-playbook -i inventory/aws_ec2.yml site.yml
+                """
+            }
+        }
+
     }
-}
-
 
     post {
         success {
