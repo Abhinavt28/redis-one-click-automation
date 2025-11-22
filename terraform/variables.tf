@@ -18,7 +18,11 @@ variable "private_subnet_replica_cidr" {
   default = "10.0.3.0/24"
 }
 
-variable "key_name" {}
+variable "key_name" {
+  description = "SSH key pair name"
+  default     = "ubuntu"
+}
+
 
 variable "allowed_ssh_cidr" {
   default = "0.0.0.0/0"
