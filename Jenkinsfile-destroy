@@ -10,10 +10,22 @@ pipeline {
             }
         }
 
-        stage('Terraform Init') {
+        stage('Terraform Init (Load S3 State)') {
             steps {
                 dir('terraform') {
-                    sh 'terraform init'
+                    sh """
+                        terraform init -input=false
+                    """
+                }
+            }
+        }
+
+        stage('Terraform Plan Destroy') {
+            steps {
+                dir('terraform') {
+                    sh """
+                        terraform plan -destroy -out=tfdestroy -input=false
+                    """
                 }
             }
         }
@@ -21,23 +33,21 @@ pipeline {
         stage('Terraform Destroy') {
             steps {
                 dir('terraform') {
-                    sh '''
-                        terraform destroy -auto-approve \
-                          -var="vpc_id=vpc-042437eaf1b20f768" \
-                          -var="subnet_id=subnet-099653b9a674986d4" \
-                          -var="key_name=ubuntu"
-                    '''
+                    sh """
+                        terraform destroy -auto-approve -input=false
+                    """
                 }
             }
         }
+
     }
 
     post {
         success {
-            echo "Destroy Completed Successfully!"
+            echo "🗑️ Successfully Destroyed All Resources!"
         }
         failure {
-            echo "Destroy Failed. Check logs."
+            echo "❌ Destroy Failed. Check logs!"
         }
     }
 }
