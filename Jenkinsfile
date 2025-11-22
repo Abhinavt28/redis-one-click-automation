@@ -3,8 +3,8 @@ pipeline {
 
     environment {
         TF_WORKING_DIR = "terraform"
-        ANSIBLE_DIR = "ansible"
-        KEY_FILE = "${env.HOME}/.ssh/${KEY_NAME}.pem"
+        ANSIBLE_DIR    = "ansible"
+        KEY_FILE       = "${env.HOME}/.ssh/${KEY_NAME}.pem"
     }
 
     stages {
@@ -22,21 +22,20 @@ pipeline {
             }
         }
 
-       stage('Terraform Init') {
-    steps {
-        sh """
-            cd ${TF_WORKING_DIR}
-            terraform init -migrate-state -force-copy
-        """
-    }
-}
-
+        stage('Terraform Init') {
+            steps {
+                sh """
+                    cd ${TF_WORKING_DIR}
+                    terraform init -migrate-state -force-copy
+                """
+            }
+        }
 
         stage('Terraform Plan') {
             steps {
                 sh """
                     cd ${TF_WORKING_DIR}
-                    terraform plan -out=tfplan -input=false
+                    terraform plan -out=tfplan -input=false -var="key_name=${KEY_NAME}"
                 """
             }
         }
