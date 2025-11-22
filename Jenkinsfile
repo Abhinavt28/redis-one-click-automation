@@ -11,7 +11,7 @@ pipeline {
 
         stage('Clean Workspace') {
             steps {
-                cleanWs()
+                // cleanWs()   // Uncomment only AFTER first successful run
             }
         }
 
@@ -26,7 +26,7 @@ pipeline {
             steps {
                 sh """
                     cd ${TF_WORKING_DIR}
-                    terraform init -input=false
+                    terraform init
                 """
             }
         }
@@ -59,9 +59,10 @@ pipeline {
         stage('Configure Redis Using Ansible') {
             steps {
                 sh """
-                    BASTION_IP=\$(terraform -chdir=terraform output -raw bastion_public_ip)
-
                     cd ${ANSIBLE_DIR}
+
+                    # Get bastion public IP from terraform state
+                    BASTION_IP=\$(terraform -chdir=../terraform output -raw bastion_public_ip)
 
                     export ANSIBLE_SSH_ARGS="-o ProxyCommand='ssh -W %h:%p ubuntu@\${BASTION_IP} -i \${KEY_FILE}'"
 
