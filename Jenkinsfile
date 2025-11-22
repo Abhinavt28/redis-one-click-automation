@@ -57,20 +57,23 @@ pipeline {
         }
 
         stage('Configure Redis Using Ansible') {
-            steps {
-                sh """
-                    cd ${ANSIBLE_DIR}
+    steps {
+        sh """
+            cd ${ANSIBLE_DIR}
 
-                    BASTION_IP=\$(terraform -chdir=../terraform output -raw bastion_public_ip)
+            # Install required collections
+            ansible-galaxy collection install -r requirements.yml
 
-                    export ANSIBLE_SSH_ARGS="-o ProxyCommand='ssh -W %h:%p ubuntu@\${BASTION_IP} -i \${KEY_FILE}'"
+            # Fetch bastion IP from terraform
+            BASTION_IP=\$(terraform -chdir=../terraform output -raw bastion_public_ip)
 
-                    ansible-playbook -i inventory/aws_ec2.yml site.yml
-                """
-            }
-        }
+            export ANSIBLE_SSH_ARGS="-o ProxyCommand='ssh -W %h:%p ubuntu@\${BASTION_IP} -i \${KEY_FILE}'"
 
+            ansible-playbook -i inventory/aws_ec2.yml site.yml
+        """
     }
+}
+
 
     post {
         success {
