@@ -11,7 +11,8 @@ pipeline {
 
         stage('Clean Workspace') {
             steps {
-                // cleanWs()   // Uncomment only AFTER first successful run
+                echo "Skipping cleanWs for first run"
+                # cleanWs()  // DO NOT USE // inside steps
             }
         }
 
@@ -61,7 +62,6 @@ pipeline {
                 sh """
                     cd ${ANSIBLE_DIR}
 
-                    # Get bastion public IP from terraform state
                     BASTION_IP=\$(terraform -chdir=../terraform output -raw bastion_public_ip)
 
                     export ANSIBLE_SSH_ARGS="-o ProxyCommand='ssh -W %h:%p ubuntu@\${BASTION_IP} -i \${KEY_FILE}'"
@@ -74,11 +74,7 @@ pipeline {
     }
 
     post {
-        success {
-            echo "🚀 Redis Master + Replica Deployment SUCCESS!"
-        }
-        failure {
-            echo "❌ Deployment Failed. Check console output."
-        }
+        success { echo "🚀 Redis Master + Replica Deployment SUCCESS!" }
+        failure { echo "❌ Deployment Failed. Check console output." }
     }
 }
