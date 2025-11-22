@@ -4,6 +4,7 @@ pipeline {
     environment {
         TF_WORKING_DIR = "terraform"
         ANSIBLE_DIR = "ansible"
+        KEY_FILE = "${env.HOME}/.ssh/${KEY_NAME}.pem"
     }
 
     stages {
@@ -16,7 +17,8 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                checkout scm
+                git branch: 'main',
+                    url: 'https://github.com/Abhinavt28/redis-one-click-automation.git'
             }
         }
 
@@ -42,27 +44,26 @@ pipeline {
             steps {
                 sh """
                     cd ${TF_WORKING_DIR}
-                    terraform apply -input=false -auto-approve tfplan
+                    terraform apply -auto-approve -input=false tfplan
                 """
             }
         }
 
         stage('Wait For EC2 Boot') {
             steps {
-                echo "Waiting 30 seconds for bastion + redis instances to fully boot..."
+                echo "Waiting 30 seconds for bastion & Redis instances to be ready…"
                 sh "sleep 30"
             }
         }
 
-        stage('Configure Redis (Ansible)') {
+        stage('Configure Redis Using Ansible') {
             steps {
                 sh """
+                    BASTION_IP=\$(terraform -chdir=terraform output -raw bastion_public_ip)
+
                     cd ${ANSIBLE_DIR}
 
-                    # Fetch Bastion IP dynamically from terraform state
-                    BASTION_IP=\$(terraform -chdir=../terraform output -raw bastion_public_ip)
-
-                    export ANSIBLE_SSH_ARGS="-o ProxyCommand='ssh -W %h:%p ubuntu@\$BASTION_IP -i ~/.ssh/${KEY_NAME}.pem'"
+                    export ANSIBLE_SSH_ARGS="-o ProxyCommand='ssh -W %h:%p ubuntu@\${BASTION_IP} -i \${KEY_FILE}'"
 
                     ansible-playbook -i inventory/aws_ec2.yml site.yml
                 """
@@ -73,10 +74,10 @@ pipeline {
 
     post {
         success {
-            echo "🚀 Redis Master + Replica Deployment Successful!"
+            echo "🚀 Redis Master + Replica Deployment SUCCESS!"
         }
         failure {
-            echo "❌ Deployment Failed — Please check logs!"
+            echo "❌ Deployment Failed. Check console output."
         }
     }
 }
