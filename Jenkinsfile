@@ -2,9 +2,11 @@ pipeline {
     agent any
 
     environment {
-        TF_WORKING_DIR = "terraform"
-        ANSIBLE_DIR    = "ansible"
-        KEY_FILE       = "/var/lib/jenkins/.ssh/ubuntu.pem"
+        AWS_REGION = "us-east-1"
+        TF_WORKDIR = "terraform"
+        ANS_WORKDIR = "ansible"
+        BASTION_SSH_KEY = "/var/lib/jenkins/.ssh/ubuntu.pem"   // AWS EC2 keypair
+        PRIVATE_SSH_KEY = "/var/lib/jenkins/.ssh/ubuntu"       // Jenkins keypair (ubuntu / ubuntu.pub)
     }
 
     stages {
@@ -26,68 +28,52 @@ pipeline {
         stage('Fix SSH known_hosts') {
             steps {
                 sh '''
-                    echo "Cleaning Jenkins SSH known_hosts..."
-                    rm -f ~/.ssh/known_hosts || true
-                    touch ~/.ssh/known_hosts
-                    chmod 600 ~/.ssh/known_hosts
+                echo "Cleaning Jenkins SSH known_hosts..."
+                rm -f /var/lib/jenkins/.ssh/known_hosts
+                touch /var/lib/jenkins/.ssh/known_hosts
+                chmod 600 /var/lib/jenkins/.ssh/known_hosts
                 '''
             }
         }
 
-        stage('Terraform Init') {
+        stage('Terraform Init & Apply') {
             steps {
-                sh """
-                    cd ${TF_WORKING_DIR}
-                    terraform init -migrate-state -force-copy
-                """
-            }
-        }
-
-        stage('Terraform Plan') {
-            steps {
-                sh """
-                    cd ${TF_WORKING_DIR}
-                    terraform plan -out=tfplan
-                """
-            }
-        }
-
-        stage('Terraform Apply') {
-            steps {
-                sh """
-                    cd ${TF_WORKING_DIR}
-                    terraform apply -auto-approve tfplan
-                """
+                sh '''
+                cd ${TF_WORKDIR}
+                terraform init -migrate-state -force-copy
+                terraform plan -out=tfplan
+                terraform apply -auto-approve tfplan
+                '''
             }
         }
 
         stage('Wait For EC2 Boot') {
             steps {
-                echo "Waiting 30 seconds for bastion & Redis instances to be ready…"
-                sh "sleep 30"
+                // thoda time do instances ko boot hone ke liye
+                sh 'sleep 60'
             }
         }
 
         stage('Configure Redis Using Ansible') {
             steps {
                 sh '''
-                    cd ansible
+                cd ${ANS_WORKDIR}
 
-                    echo "Installing AWS collection..."
-                    ansible-galaxy collection install -r requirements.yml
+                echo "Installing AWS collection..."
+                ansible-galaxy collection install -r requirements.yml
 
-                    echo "Fetching Bastion IP..."
-                    BASTION_IP=$(terraform -chdir=../terraform output -raw bastion_public_ip)
-                    echo "Bastion IP = $BASTION_IP"
+                echo "Fetching Bastion IP from Terraform..."
+                BASTION_IP=$(terraform -chdir=../${TF_WORKDIR} output -raw bastion_public_ip)
+                echo "Bastion IP = ${BASTION_IP}"
 
-                    # Set ProxyCommand via bastion
-                    export ANSIBLE_SSH_ARGS="-o ProxyCommand=\\"ssh -W %h:%p ubuntu@$BASTION_IP -i /var/lib/jenkins/.ssh/ubuntu.pem\\""
+                # ProxyCommand: Jenkins -> Bastion (using ubuntu.pem)
+                export ANSIBLE_SSH_ARGS="-o ProxyCommand=\\"ssh -W %h:%p -i ${BASTION_SSH_KEY} ubuntu@${BASTION_IP}\\""
 
-                    echo "Testing inventory..."
-                    ansible-inventory -i inventory/aws_ec2.yml --graph
+                echo "Testing inventory..."
+                ansible-inventory -i inventory/aws_ec2.yml --graph
 
-                    echo "Running Ansible playbook..."
-                    ansible-playbook -i inventory/aws_ec2.yml site.yml
+                echo "Running Ansible playbook..."
+                ansible-playbook -i inventory/aws_ec2.yml site.yml --private-key=${PRIVATE_SSH_KEY}
                 '''
             }
         }
