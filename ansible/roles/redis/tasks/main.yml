@@ -1,7 +1,8 @@
 ---
-- name: Install Redis
+
+- name: Install Redis (correct package)
   apt:
-    name: redis-server
+    name: redis
     state: present
     update_cache: yes
 
@@ -17,16 +18,20 @@
     regexp: '^protected-mode'
     line: 'protected-mode no'
 
-- name: Fetch master private IP (for replica only)
-  when: "'replica' in group_names"
-  command: terraform -chdir=../../terraform output -raw redis_master_private_ip
-  register: master_ip_cmd
+# MASTER ONLY
+- name: Ensure Redis running
+  when: "'master' in group_names"
+  service:
+    name: redis-server
+    state: restarted
+    enabled: yes
 
+# REPLICA ONLY
 - name: Configure replicaof
   when: "'replica' in group_names"
   lineinfile:
     path: /etc/redis/redis.conf
-    line: "replicaof {{ master_ip_cmd.stdout }} 6379"
+    line: "replicaof {{ hostvars[groups['tag_Role__master'][0]].ansible_host }} 6379"
 
 - name: Restart Redis
   service:
