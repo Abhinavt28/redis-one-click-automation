@@ -20,9 +20,10 @@ provider "aws" {
   region = var.aws_region
 }
 
-# -----------------------------
+#####################
 # VPC
-# -----------------------------
+#####################
+
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
@@ -35,9 +36,10 @@ resource "aws_vpc" "main" {
   }
 }
 
-# -----------------------------
+#####################
 # IGW
-# -----------------------------
+#####################
+
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
 
@@ -46,9 +48,10 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
-# -----------------------------
-# PUBLIC SUBNET (BASTION)
-# -----------------------------
+#####################
+# PUBLIC SUBNET
+#####################
+
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.public_subnet_cidr
@@ -60,9 +63,10 @@ resource "aws_subnet" "public" {
   }
 }
 
-# -----------------------------
+#####################
 # PRIVATE SUBNETS
-# -----------------------------
+#####################
+
 resource "aws_subnet" "private_master" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.private_subnet_master_cidr
@@ -85,9 +89,10 @@ resource "aws_subnet" "private_replica" {
   }
 }
 
-# -----------------------------
+#####################
 # NAT GATEWAY
-# -----------------------------
+#####################
+
 resource "aws_eip" "nat_eip" {
   domain = "vpc"
 
@@ -106,9 +111,10 @@ resource "aws_nat_gateway" "nat" {
   }
 }
 
-# -----------------------------
+#####################
 # ROUTE TABLES
-# -----------------------------
+#####################
+
 resource "aws_route_table" "public_rt" {
   vpc_id = aws_vpc.main.id
 
@@ -150,9 +156,10 @@ resource "aws_route_table_association" "private_replica_assoc" {
   subnet_id      = aws_subnet.private_replica.id
 }
 
-# -----------------------------
+##############################
 # SECURITY GROUPS
-# -----------------------------
+##############################
+
 resource "aws_security_group" "bastion_sg" {
   name        = "bastion-sg"
   description = "Allow SSH from your laptop"
@@ -171,10 +178,6 @@ resource "aws_security_group" "bastion_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
-  tags = {
-    Name = "bastion-sg"
-  }
 }
 
 resource "aws_security_group" "redis_sg" {
@@ -191,7 +194,7 @@ resource "aws_security_group" "redis_sg" {
   }
 
   ingress {
-    description = "Redis traffic inside VPC"
+    description = "Redis traffic VPC internal"
     from_port   = 6379
     to_port     = 6379
     protocol    = "tcp"
@@ -204,15 +207,12 @@ resource "aws_security_group" "redis_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
-  tags = {
-    Name = "redis-sg"
-  }
 }
 
-# -----------------------------
+##############################
 # UBUNTU AMI
-# -----------------------------
+##############################
+
 data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = ["099720109477"]
@@ -223,9 +223,10 @@ data "aws_ami" "ubuntu" {
   }
 }
 
-# -----------------------------
-# BASTION HOST
-# -----------------------------
+##############################
+# BASTION
+##############################
+
 resource "aws_instance" "bastion" {
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = "t3.micro"
@@ -235,15 +236,14 @@ resource "aws_instance" "bastion" {
   key_name                    = var.key_name
 
   tags = {
-    Name  = "bastion-host"
-    OWNER = var.owner
-    ENV   = var.env
+    Name = "bastion-host"
   }
 }
 
-# -----------------------------
+##############################
 # REDIS MASTER
-# -----------------------------
+##############################
+
 resource "aws_instance" "redis_master" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.redis_instance_type
@@ -252,33 +252,33 @@ resource "aws_instance" "redis_master" {
   key_name               = var.key_name
 
   tags = {
-    Name    = "redis-master"
-    Project = "redis"
-    Role    = "master"
+    Name = "redis-master"
+    Role = "master"
   }
 
   user_data = <<-EOF
-  #!/bin/bash
-  apt-get update -y
-  apt-get install -y redis-server
+#!/bin/bash
+apt-get update -y
+apt-get install -y redis-server
 
-  sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis/redis.conf
+sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis/redis.conf
 
-  # ADD Jenkins PUBLIC KEY (IMPORTANT)
-  mkdir -p /home/ubuntu/.ssh
-  echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDHHFZa5jQb5zb867a45BH9j+zEdQ11bryEVCv2HIwjqg6GxOUi37jXMcra8dy901WrPU7Vq4QoN0UHN9L9+tYFnOS1tStBooQ3WnYIAGnROuLo81Q0bmVQ1VJ+X0/v+XJSN9XEQ0EcTCO9bcn3HX83aY2oghs7Q2ze+dn/uoLVt5GSgSG2S0CCpuztUuPC19597qv96p8NnmgJT+BGyI0uOrpQKBrvycZbXNUHdXJQXuLAVgVDwkDIpnVA7UUrZc4606Ipwuj/SSBGVagFUZZwAdA2g1lpXNr1wHtSyeW8fFtipUzc1WGNjRsq+VQb3ZlKmSGBJvrmQPv5HosyqQ4h" > /home/ubuntu/.ssh/authorized_keys
+# ADD Jenkins PUBLIC KEY
+mkdir -p /home/ubuntu/.ssh
+echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDRG1Xlpnhbp5d3ls9uD1jaMKRHMKqxBS64zBCOmTv1EFUvdz1Ss1giNtrS37r2DcTp6Oq1408AkrROsqyuTpNZUyIG9fSCEHiZVuvdc4eq0gh5MT/3hlmnC/v1mCpinZZu3YF5d+y0nn6Tbad87inVzwOZjpl/7+nx3qSQAl5q6HkMSs1iXALqO7lQ0qz7y2BbZY81GKRgq2f4sJ849D12roUYAsIF70BP2nu7+XyX/8+pK/1Zf13qS51I7IHF5/wYEFUI3BTtHXnLUggu/y1hx6YNgmFVlgOjGg3px2jrPg/q/oL+iF9bPJD61jfXid7Nuw0iTuZlv938ChB2OYyN3rBJIfEYS2zmFJPyq8wcaAYBq874rPv1rJYVF44DdsQneyi84orv0OEAPRZDYo5CN4086058VTfNRUB7Pl6e43/ZQikDqZYKYmX22kAOWcRkkJ5M99PNJHfvHvEOEu/1D9KxwdDcFQkSz7iDRLIAkNGfbaQsOX7bCVyz6pDrb62JjMLD/bet4cjmEGbCBCDYmHIqJndUP1GrWlgTbn0m4LR8PAhUxVLYAuFzxlUuguAB+keQMLwp2U4XxS/2tVEwvw/arO+BFNcITNF2IrzsTBuL3lrlDKiB/LpPETJx99IVyE1ZDtdklc0U4G9FgUEJfvqf+kCGnXOu7CdXC1yjiw== jenkins@ip-172-31-77-65" > /home/ubuntu/.ssh/authorized_keys
 
-  chmod 600 /home/ubuntu/.ssh/authorized_keys
-  chown -R ubuntu:ubuntu /home/ubuntu/.ssh
+chmod 600 /home/ubuntu/.ssh/authorized_keys
+chown -R ubuntu:ubuntu /home/ubuntu/.ssh
 
-  systemctl enable redis-server
-  systemctl restart redis-server
-  EOF
+systemctl enable redis-server
+systemctl restart redis-server
+EOF
 }
 
-# -----------------------------
+##############################
 # REDIS REPLICA
-# -----------------------------
+##############################
+
 resource "aws_instance" "redis_replica" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.redis_instance_type
@@ -287,29 +287,28 @@ resource "aws_instance" "redis_replica" {
   key_name               = var.key_name
 
   tags = {
-    Name    = "redis-replica"
-    Project = "redis"
-    Role    = "replica"
+    Name = "redis-replica"
+    Role = "replica"
   }
 
   user_data = <<-EOF
-  #!/bin/bash
-  apt-get update -y
-  apt-get install -y redis-server
+#!/bin/bash
+apt-get update -y
+apt-get install -y redis-server
 
-  sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis/redis.conf
-  echo "replicaof ${aws_instance.redis_master.private_ip} 6379" >> /etc/redis/redis.conf
+sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis/redis.conf
+echo "replicaof ${aws_instance.redis_master.private_ip} 6379" >> /etc/redis/redis.conf
 
-  # ADD Jenkins PUBLIC KEY (IMPORTANT)
-  mkdir -p /home/ubuntu/.ssh
-  echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDHHFZa5jQb5zb867a45BH9j+zEdQ11bryEVCv2HIwjqg6GxOUi37jXMcra8dy901WrPU7Vq4QoN0UHN9L9+tYFnOS1tStBooQ3WnYIAGnROuLo81Q0bmVQ1VJ+X0/v+XJSN9XEQ0EcTCO9bcn3HX83aY2oghs7Q2ze+dn/uoLVt5GSgSG2S0CCpuztUuPC19597qv96p8NnmgJT+BGyI0uOrpQKBrvycZbXNUHdXJQXuLAVgVDwkDIpnVA7UUrZc4606Ipwuj/SSBGVagFUZZwAdA2g1lpXNr1wHtSyeW8fFtipUzc1WGNjRsq+VQb3ZlKmSGBJvrmQPv5HosyqQ4h" > /home/ubuntu/.ssh/authorized_keys
+# ADD Jenkins PUBLIC KEY
+mkdir -p /home/ubuntu/.ssh
+echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDRG1Xlpnhbp5d3ls9uD1jaMKRHMKqxBS64zBCOmTv1EFUvdz1Ss1giNtrS37r2DcTp6Oq1408AkrROsqyuTpNZUyIG9fSCEHiZVuvdc4eq0gh5MT/3hlmnC/v1mCpinZZu3YF5d+y0nn6Tbad87inVzwOZjpl/7+nx3qSQAl5q6HkMSs1iXALqO7lQ0qz7y2BbZY81GKRgq2f4sJ849D12roUYAsIF70BP2nu7+XyX/8+pK/1Zf13qS51I7IHF5/wYEFUI3BTtHXnLUggu/y1hx6YNgmFVlgOjGg3px2jrPg/q/oL+iF9bPJD61jfXid7Nuw0iTuZlv938ChB2OYyN3rBJIfEYS2zmFJPyq8wcaAYBq874rPv1rJYVF44DdsQneyi84orv0OEAPRZDYo5CN4086058VTfNRUB7Pl6e43/ZQikDqZYKYmX22kAOWcRkkJ5M99PNJHfvHvEOEu/1D9KxwdDcFQkSz7iDRLIAkNGfbaQsOX7bCVyz6pDrb62JjMLD/bet4cjmEGbCBCDYmHIqJndUP1GrWlgTbn0m4LR8PAhUxVLYAuFzxlUuguAB+keQMLwp2U4XxS/2tVEwvw/arO+BFNcITNF2IrzsTBuL3lrlDKiB/LpPETJx99IVyE1ZDtdklc0U4G9FgUEJfvqf+kCGnXOu7CdXC1yjiw== jenkins@ip-172-31-77-65" > /home/ubuntu/.ssh/authorized_keys
 
-  chmod 600 /home/ubuntu/.ssh/authorized_keys
-  chown -R ubuntu:ubuntu /home/ubuntu/.ssh
+chmod 600 /home/ubuntu/.ssh/authorized_keys
+chown -R ubuntu:ubuntu /home/ubuntu/.ssh
 
-  systemctl enable redis-server
-  systemctl restart redis-server
-  EOF
+systemctl enable redis-server
+systemctl restart redis-server
+EOF
 }
 
 
