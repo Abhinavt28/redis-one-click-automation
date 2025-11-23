@@ -1,37 +1,47 @@
----
+- name: Ensure SSH directory exists
+  file:
+    path: /home/ubuntu/.ssh
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0700'
 
-- name: Install Redis (correct package)
+- name: Install Jenkins public key
+  copy:
+    src: /var/lib/jenkins/.ssh/ubuntu.pub
+    dest: /home/ubuntu/.ssh/authorized_keys
+    owner: ubuntu
+    group: ubuntu
+    mode: '0600'
+
+- name: Install Redis
   apt:
-    name: redis
+    name: redis-server
     state: present
     update_cache: yes
 
-- name: Allow redis to listen on all interfaces
+- name: Listen on all interfaces
   lineinfile:
     path: /etc/redis/redis.conf
-    regexp: '^bind'
+    regexp: '^bind '
     line: 'bind 0.0.0.0'
 
-- name: Disable protected-mode
+- name: Disable protected mode
   lineinfile:
     path: /etc/redis/redis.conf
     regexp: '^protected-mode'
     line: 'protected-mode no'
 
-# MASTER ONLY
-- name: Ensure Redis running
-  when: "'master' in group_names"
-  service:
-    name: redis-server
-    state: restarted
-    enabled: yes
+- name: Get master IP
+  when: "'replica' in group_names"
+  command: terraform -chdir=../../terraform output -raw redis_master_private_ip
+  register: master_ip
 
-# REPLICA ONLY
-- name: Configure replicaof
+- name: Configure replica
   when: "'replica' in group_names"
   lineinfile:
     path: /etc/redis/redis.conf
-    line: "replicaof {{ hostvars[groups['tag_Role__master'][0]].ansible_host }} 6379"
+    line: "replicaof {{ master_ip.stdout }} 6379"
 
 - name: Restart Redis
   service:
