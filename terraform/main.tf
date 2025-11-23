@@ -20,9 +20,9 @@ provider "aws" {
   region = var.aws_region
 }
 
-#####################
+##############################
 # VPC
-#####################
+##############################
 
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
@@ -36,9 +36,9 @@ resource "aws_vpc" "main" {
   }
 }
 
-#####################
-# IGW
-#####################
+##############################
+# INTERNET GATEWAY
+##############################
 
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
@@ -48,9 +48,9 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
-#####################
+##############################
 # PUBLIC SUBNET
-#####################
+##############################
 
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
@@ -63,9 +63,9 @@ resource "aws_subnet" "public" {
   }
 }
 
-#####################
+##############################
 # PRIVATE SUBNETS
-#####################
+##############################
 
 resource "aws_subnet" "private_master" {
   vpc_id                  = aws_vpc.main.id
@@ -89,9 +89,9 @@ resource "aws_subnet" "private_replica" {
   }
 }
 
-#####################
-# NAT GATEWAY
-#####################
+##############################
+# NAT + ROUTES
+##############################
 
 resource "aws_eip" "nat_eip" {
   domain = "vpc"
@@ -110,10 +110,6 @@ resource "aws_nat_gateway" "nat" {
     Name = "redis-nat"
   }
 }
-
-#####################
-# ROUTE TABLES
-#####################
 
 resource "aws_route_table" "public_rt" {
   vpc_id = aws_vpc.main.id
@@ -162,14 +158,14 @@ resource "aws_route_table_association" "private_replica_assoc" {
 
 resource "aws_security_group" "bastion_sg" {
   name        = "bastion-sg"
-  description = "Allow SSH from your laptop"
+  description = "Allow SSH from laptop"
   vpc_id      = aws_vpc.main.id
 
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [var.allowed_ssh_cidr]
+    cidr_blocks = [var.allowed_ssh_cidr]  # your home IP
   }
 
   egress {
@@ -190,15 +186,15 @@ resource "aws_security_group" "redis_sg" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description    = "Allow SSH from bastion"
-    from_port      = 22
-    to_port        = 22
-    protocol       = "tcp"
+    description     = "SSH from bastion only"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
     security_groups = [aws_security_group.bastion_sg.id]
   }
 
   ingress {
-    description = "Redis traffic VPC internal"
+    description = "Redis internal traffic"
     from_port   = 6379
     to_port     = 6379
     protocol    = "tcp"
@@ -218,7 +214,7 @@ resource "aws_security_group" "redis_sg" {
 }
 
 ##############################
-# UBUNTU AMI
+# AMI
 ##############################
 
 data "aws_ami" "ubuntu" {
@@ -232,7 +228,7 @@ data "aws_ami" "ubuntu" {
 }
 
 ##############################
-# BASTION
+# BASTION WITH KEY
 ##############################
 
 resource "aws_instance" "bastion" {
@@ -246,6 +242,14 @@ resource "aws_instance" "bastion" {
   tags = {
     Name = "bastion-host"
   }
+
+  user_data = <<-EOF
+#!/bin/bash
+mkdir -p /home/ubuntu/.ssh
+echo "${file("/var/lib/jenkins/.ssh/ubuntu.pub")}" > /home/ubuntu/.ssh/authorized_keys
+chmod 600 /home/ubuntu/.ssh/authorized_keys
+chown -R ubuntu:ubuntu /home/ubuntu/.ssh
+EOF
 }
 
 ##############################
@@ -271,10 +275,8 @@ apt-get install -y redis-server
 
 sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis/redis.conf
 
-# ADD PERMANENT JENKINS PUBLIC KEY
 mkdir -p /home/ubuntu/.ssh
-echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDRG1Xlpnhbp5d3ls9uD1jaMKRHMKqxBS64zBCOmTv1EFUvdz1Ss1giNtrS37r2DcTp6Oq1408AkrROsqyuTpNZUyIG9fSCEHiZVuvdc4eq0gh5MT/3hlmnC/v1mCpinZZu3YF5d+y0nn6Tbad87inVzwOZjpl/7+nx3qSQAl5q6HkMSs1iXALqO7lQ0qz7y2BbZY81GKRgq2f4sJ849D12roUYAsIF70BP2nu7+XyX/8+pK/1Zf13qS51I7IHF5/wYEFUI3BTtHXnLUggu/y1hx6YNgmFVlgOjGg3px2jrPg/q/oL+iF9bPJD61jfXid7Nuw0iTuZlv938ChB2OYyN3rBJIfEYS2zmFJPyq8wcaAYBq874rPv1rJYVF44DdsQneyi84orv0OEAPRZDYo5CN4086058VTfNRUB7Pl6e43/ZQikDqZYKYmX22kAOWcRkkJ5M99PNJHfvHvEOEu/1D9KxwdDcFQkSz7iDRLIAkNGfbaQsOX7bCVyz6pDrb62JjMLD/bet4cjmEGbCBCDYmHIqJndUP1GrWlgTbn0m4LR8PAhUxVLYAuFzxlUuguAB+keQMLwp2U4XxS/2tVEwvw/arO+BFNcITNF2IrzsTBuL3lrlDKiB/LpPETJx99IVyE1ZDtdklc0U4G9FgUEJfvqf+kCGnXOu7CdXC1yjiw== jenkins@ip-172-31-77-65" > /home/ubuntu/.ssh/authorized_keys
-
+echo "${file("/var/lib/jenkins/.ssh/ubuntu.pub")}" > /home/ubuntu/.ssh/authorized_keys
 chmod 600 /home/ubuntu/.ssh/authorized_keys
 chown -R ubuntu:ubuntu /home/ubuntu/.ssh
 
@@ -307,10 +309,8 @@ apt-get install -y redis-server
 sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis/redis.conf
 echo "replicaof ${aws_instance.redis_master.private_ip} 6379" >> /etc/redis/redis.conf
 
-# ADD PERMANENT JENKINS PUBLIC KEY
 mkdir -p /home/ubuntu/.ssh
-echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDRG1Xlpnhbp5d3ls9uD1jaMKRHMKqxBS64zBCOmTv1EFUvdz1Ss1giNtrS37r2DcTp6Oq1408AkrROsqyuTpNZUyIG9fSCEHiZVuvdc4eq0gh5MT/3hlmnC/v1mCpinZZu3YF5d+y0nn6Tbad87inVzwOZjpl/7+nx3qSQAl5q6HkMSs1iXALqO7lQ0qz7y2BbZY81GKRgq2f4sJ849D12roUYAsIF70BP2nu7+XyX/8+pK/1Zf13qS51I7IHF5/wYEFUI3BTtHXnLUggu/y1hx6YNgmFVlgOjGg3px2jrPg/q/oL+iF9bPJD61jfXid7Nuw0iTuZlv938ChB2OYyN3rBJIfEYS2zmFJPyq8wcaAYBq874rPv1rJYVF44DdsQneyi84orv0OEAPRZDYo5CN4086058VTfNRUB7Pl6e43/ZQikDqZYKYmX22kAOWcRkkJ5M99PNJHfvHvEOEu/1D9KxwdDcFQkSz7iDRLIAkNGfbaQsOX7bCVyz6pDrb62JjMLD/bet4cjmEGbCBCDYmHIqJndUP1GrWlgTbn0m4LR8PAhUxVLYAuFzxlUuguAB+keQMLwp2U4XxS/2tVEwvw/arO+BFNcITNF2IrzsTBuL3lrlDKiB/LpPETJx99IVyE1ZDtdklc0U4G9FgUEJfvqf+kCGnXOu7CdXC1yjiw== jenkins@ip-172-31-77-65" > /home/ubuntu/.ssh/authorized_keys
-
+echo "${file("/var/lib/jenkins/.ssh/ubuntu.pub")}" > /home/ubuntu/.ssh/authorized_keys
 chmod 600 /home/ubuntu/.ssh/authorized_keys
 chown -R ubuntu:ubuntu /home/ubuntu/.ssh
 
@@ -318,3 +318,4 @@ systemctl enable redis-server
 systemctl restart redis-server
 EOF
 }
+
