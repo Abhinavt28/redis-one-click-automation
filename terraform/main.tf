@@ -2,9 +2,9 @@ terraform {
   required_version = ">= 1.0"
 
   backend "s3" {
-    bucket = "abhinav-redis-tf-state"
-    key    = "redis-infra/terraform.tfstate"
-    region = "us-east-1"
+    bucket  = "abhinav-redis-tf-state"
+    key     = "redis-infra/terraform.tfstate"
+    region  = "us-east-1"
     encrypt = true
   }
 
@@ -178,6 +178,10 @@ resource "aws_security_group" "bastion_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  tags = {
+    Name = "bastion-sg"
+  }
 }
 
 resource "aws_security_group" "redis_sg" {
@@ -186,10 +190,10 @@ resource "aws_security_group" "redis_sg" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "Allow SSH from bastion"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
+    description    = "Allow SSH from bastion"
+    from_port      = 22
+    to_port        = 22
+    protocol       = "tcp"
     security_groups = [aws_security_group.bastion_sg.id]
   }
 
@@ -206,6 +210,10 @@ resource "aws_security_group" "redis_sg" {
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "redis-sg"
   }
 }
 
@@ -263,7 +271,7 @@ apt-get install -y redis-server
 
 sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis/redis.conf
 
-# ADD Jenkins PUBLIC KEY
+# ADD PERMANENT JENKINS PUBLIC KEY
 mkdir -p /home/ubuntu/.ssh
 echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDRG1Xlpnhbp5d3ls9uD1jaMKRHMKqxBS64zBCOmTv1EFUvdz1Ss1giNtrS37r2DcTp6Oq1408AkrROsqyuTpNZUyIG9fSCEHiZVuvdc4eq0gh5MT/3hlmnC/v1mCpinZZu3YF5d+y0nn6Tbad87inVzwOZjpl/7+nx3qSQAl5q6HkMSs1iXALqO7lQ0qz7y2BbZY81GKRgq2f4sJ849D12roUYAsIF70BP2nu7+XyX/8+pK/1Zf13qS51I7IHF5/wYEFUI3BTtHXnLUggu/y1hx6YNgmFVlgOjGg3px2jrPg/q/oL+iF9bPJD61jfXid7Nuw0iTuZlv938ChB2OYyN3rBJIfEYS2zmFJPyq8wcaAYBq874rPv1rJYVF44DdsQneyi84orv0OEAPRZDYo5CN4086058VTfNRUB7Pl6e43/ZQikDqZYKYmX22kAOWcRkkJ5M99PNJHfvHvEOEu/1D9KxwdDcFQkSz7iDRLIAkNGfbaQsOX7bCVyz6pDrb62JjMLD/bet4cjmEGbCBCDYmHIqJndUP1GrWlgTbn0m4LR8PAhUxVLYAuFzxlUuguAB+keQMLwp2U4XxS/2tVEwvw/arO+BFNcITNF2IrzsTBuL3lrlDKiB/LpPETJx99IVyE1ZDtdklc0U4G9FgUEJfvqf+kCGnXOu7CdXC1yjiw== jenkins@ip-172-31-77-65" > /home/ubuntu/.ssh/authorized_keys
 
@@ -299,7 +307,7 @@ apt-get install -y redis-server
 sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis/redis.conf
 echo "replicaof ${aws_instance.redis_master.private_ip} 6379" >> /etc/redis/redis.conf
 
-# ADD Jenkins PUBLIC KEY
+# ADD PERMANENT JENKINS PUBLIC KEY
 mkdir -p /home/ubuntu/.ssh
 echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDRG1Xlpnhbp5d3ls9uD1jaMKRHMKqxBS64zBCOmTv1EFUvdz1Ss1giNtrS37r2DcTp6Oq1408AkrROsqyuTpNZUyIG9fSCEHiZVuvdc4eq0gh5MT/3hlmnC/v1mCpinZZu3YF5d+y0nn6Tbad87inVzwOZjpl/7+nx3qSQAl5q6HkMSs1iXALqO7lQ0qz7y2BbZY81GKRgq2f4sJ849D12roUYAsIF70BP2nu7+XyX/8+pK/1Zf13qS51I7IHF5/wYEFUI3BTtHXnLUggu/y1hx6YNgmFVlgOjGg3px2jrPg/q/oL+iF9bPJD61jfXid7Nuw0iTuZlv938ChB2OYyN3rBJIfEYS2zmFJPyq8wcaAYBq874rPv1rJYVF44DdsQneyi84orv0OEAPRZDYo5CN4086058VTfNRUB7Pl6e43/ZQikDqZYKYmX22kAOWcRkkJ5M99PNJHfvHvEOEu/1D9KxwdDcFQkSz7iDRLIAkNGfbaQsOX7bCVyz6pDrb62JjMLD/bet4cjmEGbCBCDYmHIqJndUP1GrWlgTbn0m4LR8PAhUxVLYAuFzxlUuguAB+keQMLwp2U4XxS/2tVEwvw/arO+BFNcITNF2IrzsTBuL3lrlDKiB/LpPETJx99IVyE1ZDtdklc0U4G9FgUEJfvqf+kCGnXOu7CdXC1yjiw== jenkins@ip-172-31-77-65" > /home/ubuntu/.ssh/authorized_keys
 
@@ -310,5 +318,3 @@ systemctl enable redis-server
 systemctl restart redis-server
 EOF
 }
-
-
