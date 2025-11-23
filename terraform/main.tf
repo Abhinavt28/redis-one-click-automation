@@ -20,9 +20,9 @@ provider "aws" {
   region = var.aws_region
 }
 
-#####################
+############################
 # VPC
-#####################
+############################
 
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
@@ -36,9 +36,9 @@ resource "aws_vpc" "main" {
   }
 }
 
-#####################
-# IGW
-#####################
+############################
+# INTERNET GATEWAY
+############################
 
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
@@ -48,9 +48,9 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
-#####################
-# PUBLIC SUBNET
-#####################
+############################
+# SUBNETS
+############################
 
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
@@ -62,10 +62,6 @@ resource "aws_subnet" "public" {
     Name = "public-bastion-subnet"
   }
 }
-
-#####################
-# PRIVATE SUBNETS
-#####################
 
 resource "aws_subnet" "private_master" {
   vpc_id                  = aws_vpc.main.id
@@ -89,13 +85,12 @@ resource "aws_subnet" "private_replica" {
   }
 }
 
-#####################
+############################
 # NAT GATEWAY
-#####################
+############################
 
 resource "aws_eip" "nat_eip" {
   domain = "vpc"
-
   tags = {
     Name = "redis-nat-eip"
   }
@@ -111,9 +106,9 @@ resource "aws_nat_gateway" "nat" {
   }
 }
 
-#####################
+############################
 # ROUTE TABLES
-#####################
+############################
 
 resource "aws_route_table" "public_rt" {
   vpc_id = aws_vpc.main.id
@@ -156,9 +151,9 @@ resource "aws_route_table_association" "private_replica_assoc" {
   subnet_id      = aws_subnet.private_replica.id
 }
 
-##############################
+############################
 # SECURITY GROUPS
-##############################
+############################
 
 resource "aws_security_group" "bastion_sg" {
   name        = "bastion-sg"
@@ -186,7 +181,7 @@ resource "aws_security_group" "redis_sg" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description     = "SSH from Bastion"
+    description     = "Allow SSH from bastion"
     from_port       = 22
     to_port         = 22
     protocol        = "tcp"
@@ -194,7 +189,7 @@ resource "aws_security_group" "redis_sg" {
   }
 
   ingress {
-    description = "Redis internal traffic"
+    description = "Redis internal"
     from_port   = 6379
     to_port     = 6379
     protocol    = "tcp"
@@ -209,9 +204,9 @@ resource "aws_security_group" "redis_sg" {
   }
 }
 
-##############################
-# UBUNTU AMI
-##############################
+############################
+# AMI
+############################
 
 data "aws_ami" "ubuntu" {
   most_recent = true
@@ -223,9 +218,9 @@ data "aws_ami" "ubuntu" {
   }
 }
 
-##############################
+############################
 # BASTION
-##############################
+############################
 
 resource "aws_instance" "bastion" {
   ami                         = data.aws_ami.ubuntu.id
@@ -240,9 +235,17 @@ resource "aws_instance" "bastion" {
   }
 }
 
-##############################
+############################
+# USERDATA PUBLIC KEY
+############################
+
+locals {
+  jenkins_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDCwT/Edy+Cs8HCXIP104/uRUBveNE8srLNoqVI+Ay46OULDttqQAwS6s/DWIRzyCGCr60NGiCzhPaeE7bFRBP9CceZgSsorvgkGb68WFY/C2GoGnxkOLoGGm1weLmrublDNXyKOsh/GUWukvvVmDDyQYX7UaiuJTLLGZSbq+Ej1lydbP+dVsUEZQENsoTkRjAwEPtCVypcz2LAJ/3VwL88IBwYfLzwDvqtI1WDzcHjQ39fKXFB+f82jwV6V7ns3HjoJPJLcbLZvyr0l+ESZRx8cfrGXqOF2Cd45aBvAmPyrXCSj9IsPtuB1PoEpGtI0FDnJl8VaZ714V8vc1+ZbLcAMziT4IJXPWl7pRYNChkmw8Bp7TSfvzyLZEnoez1Cn/OkBrzQ+9poyKFBOJHYHB+xxPpSRaMwGCDjqYw//K2eg/FDt+GOJNwoqfix0fFsijz7tFNIgdRp5nf3IVBx3H8KNsSMgN8o2JMInI/PczDTpSN4mBVGS1yisD18GGAPKWea+m99iUk0GnTI+nyk9kTYPo50J8NmYyglPXbLSpJmKQaEHael7M7Sz5nNDhrztgYEbWkWBCRzmSQiGnfEboqeJmfiNCDQOSwX4gnTuAuJ3auKH9l2Pjy0YJa9UoSw1nfbndPtoShyjUdl39LoIZiLCFNdmnqGM0MExeMoaMeO+w== ubuntu@ip-10-0-1-53"
+}
+
+############################
 # REDIS MASTER
-##############################
+############################
 
 resource "aws_instance" "redis_master" {
   ami                    = data.aws_ami.ubuntu.id
@@ -263,10 +266,8 @@ apt-get install -y redis-server
 
 sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis/redis.conf
 
-# ADD STATIC PERMANENT JENKINS PUBLIC KEY
 mkdir -p /home/ubuntu/.ssh
-echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDRG1Xlpnhbp5d3ls9uD1jaMKRHMKqxBS64zBCOmTv1EFUvdz1Ss1giNtrS37r2DcTp6Oq1408AkrROsqyuTpNZUyIG9fSCEHiZVuvdc4eq0gh5MT/3hlmnC/v1mCpinZZu3YF5d+y0nn6Tbad87inVzwOZjpl/7+nx3qSQAl5q6HkMSs1iXALqO7lQ0qz7y2BbZY81GKRgq2f4sJ849D12roUYAsIF70BP2nu7+XyX/8+pK/1Zf13qS51I7IHF5/wYEFUI3BTtHXnLUggu/y1hx6YNgmFVlgOjGg3px2jrPg/q/oL+iF9bPJD61jfXid7Nuw0iTuZlv938ChB2OYyN3rBJIfEYS2zmFJPyq8wcaAYBq874rPv1rJYVF44DdsQneyi84orv0OEAPRZDYo5CN4086058VTfNRUB7Pl6e43/ZQikDqZYKYmX22kAOWcRkkJ5M99PNJHfvHvEOEu/1D9KxwdDcFQkSz7iDRLIAkNGfbaQsOX7bCVyz6pDrb62JjMLD/bet4cjmEGbCBCDYmHIqJndUP1GrWlgTbn0m4LR8PAhUxVLYAuFzxlUuguAB+keQMLwp2U4XxS/2tVEwvw/arO+BFNcITNF2IrzsTBuL3lrlDKiB/LpPETJx99IVyE1ZDtdklc0U4G9FgUEJfvqf+kCGnXOu7CdXC1yjiw== jenkins@ip-172-31-77-65" > /home/ubuntu/.ssh/authorized_keys
-
+echo "${local.jenkins_public_key}" > /home/ubuntu/.ssh/authorized_keys
 chmod 600 /home/ubuntu/.ssh/authorized_keys
 chown -R ubuntu:ubuntu /home/ubuntu/.ssh
 
@@ -275,9 +276,9 @@ systemctl restart redis-server
 EOF
 }
 
-##############################
+############################
 # REDIS REPLICA
-##############################
+############################
 
 resource "aws_instance" "redis_replica" {
   ami                    = data.aws_ami.ubuntu.id
@@ -299,10 +300,8 @@ apt-get install -y redis-server
 sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis/redis.conf
 echo "replicaof ${aws_instance.redis_master.private_ip} 6379" >> /etc/redis/redis.conf
 
-# ADD STATIC PERMANENT JENKINS PUBLIC KEY
 mkdir -p /home/ubuntu/.ssh
-echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDRG1Xlpnhbp5d3ls9uD1jaMKRHMKqxBS64zBCOmTv1EFUvdz1Ss1giNtrS37r2DcTp6Oq1408AkrROsqyuTpNZUyIG9fSCEHiZVuvdc4eq0gh5MT/3hlmnC/v1mCpinZZu3YF5d+y0nn6Tbad87inVzwOZjpl/7+nx3qSQAl5q6HkMSs1iXALqO7lQ0qz7y2BbZY81GKRgq2f4sJ849D12roUYAsIF70BP2nu7+XyX/8+pK/1Zf13qS51I7IHF5/wYEFUI3BTtHXnLUggu/y1hx6YNgmFVlgOjGg3px2jrPg/q/oL+iF9bPJD61jfXid7Nuw0iTuZlv938ChB2OYyN3rBJIfEYS2zmFJPyq8wcaAYBq874rPv1rJYVF44DdsQneyi84orv0OEAPRZDYo5CN4086058VTfNRUB7Pl6e43/ZQikDqZYKYmX22kAOWcRkkJ5M99PNJHfvHvEOEu/1D9KxwdDcFQkSz7iDRLIAkNGfbaQsOX7bCVyz6pDrb62JjMLD/bet4cjmEGbCBCDYmHIqJndUP1GrWlgTbn0m4LR8PAhUxVLYAuFzxlUuguAB+keQMLwp2U4XxS/2tVEwvw/arO+BFNcITNF2IrzsTBuL3lrlDKiB/LpPETJx99IVyE1ZDtdklc0U4G9FgUEJfvqf+kCGnXOu7CdXC1yjiw== jenkins@ip-172-31-77-65" > /home/ubuntu/.ssh/authorized_keys
-
+echo "${local.jenkins_public_key}" > /home/ubuntu/.ssh/authorized_keys
 chmod 600 /home/ubuntu/.ssh/authorized_keys
 chown -R ubuntu:ubuntu /home/ubuntu/.ssh
 
