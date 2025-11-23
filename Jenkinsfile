@@ -73,7 +73,8 @@ pipeline {
                 ansible-inventory -i inventory/aws_ec2.yml --graph
 
                 echo "Running Ansible playbook..."
-                ansible-playbook -i inventory/aws_ec2.yml site.yml --private-key=${PRIVATE_SSH_KEY}
+                ansible-playbook -i inventory/aws_ec2.yml site.yml
+
                 '''
             }
         }
