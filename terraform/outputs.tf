@@ -9,3 +9,7 @@ output "redis_master_private_ip" {
 output "redis_replica_private_ip" {
   value = aws_instance.redis_replica.private_ip
 }
+
+output "private_key_path" {
+  value = var.private_key_path
+}
